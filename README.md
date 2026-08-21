@@ -125,4 +125,4 @@ This project intentionally skips a few things that weren't worth the added compl
 
 ## Author
 
-Built by Sagarr — [GitHub](https://github.com/sagardutta11)
+Built by Sagar Dutta
