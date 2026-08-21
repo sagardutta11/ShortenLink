@@ -1,0 +1,44 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+@theme {
+  /* Color tokens */
+  --color-mint-50: #E6F7F4;
+  --color-mint-100: #C9EEE7;
+  --color-mint-400: #2DD4BF;
+  --color-mint-500: #14B8A6;
+  --color-mint-600: #0F9D8E;
+  --color-ink-900: #1A2E2A;
+  --color-ink-500: #6B7A78;
+  --color-cream: #F7FAF9;
+
+  /* Fonts */
+  --font-display: 'Sora', sans-serif;
+  --font-body: 'Inter', sans-serif;
+
+  /* Radii */
+  --radius-blob: 2rem;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-cream);
+  color: var(--color-ink-900);
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
