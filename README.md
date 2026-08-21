@@ -62,8 +62,8 @@ Create a `.env` file (see `.env.example`):
 PORT=5000
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=short_urls
-DB_USER=postgres
+DB_NAME=short_urls_databse
+DB_USER=postgres_sql_user
 DB_PASSWORD=your_password
 JWT_SECRET=your_random_secret
 JWT_EXPIRES_IN=2h
