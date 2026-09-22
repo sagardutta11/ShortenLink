@@ -1,16 +1,16 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+// In production DATABASE_URL is used (Supabase)
+// In development individual DB_* vars are used
+const usingConnectionString = !!process.env.DATABASE_URL;
+
 const required = [
-  'PORT',
-  'DB_HOST',
-  'DB_PORT',
-  'DB_NAME',
-  'DB_USER',
-  'DB_PASSWORD',
   'JWT_SECRET',
   'EMAIL_USER',
   'EMAIL_APP_PASSWORD',
+  // DB vars only required if not using DATABASE_URL
+  ...(!usingConnectionString ? ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'] : []),
 ];
 
 for (const key of required) {
@@ -20,7 +20,8 @@ for (const key of required) {
 }
 
 export const env = {
-  PORT: process.env.PORT,
+  PORT: process.env.PORT || 5000,
+  DATABASE_URL: process.env.DATABASE_URL || null,
   DB_HOST: process.env.DB_HOST,
   DB_PORT: process.env.DB_PORT,
   DB_NAME: process.env.DB_NAME,
@@ -31,4 +32,5 @@ export const env = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   EMAIL_USER: process.env.EMAIL_USER,
   EMAIL_APP_PASSWORD: process.env.EMAIL_APP_PASSWORD,
+  CORS_ORIGIN: process.env.CORS_ORIGIN,
 };
