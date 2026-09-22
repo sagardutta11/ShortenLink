@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import Logo from '../ui/Logo';
 import { login } from '../../lib/api';
 import { useAuth } from '../../lib/AuthContext';
+import Logo from '../ui/Logo';
 import Button from '../ui/Button';
 import FormField from '../ui/FormField';
 
@@ -13,7 +13,10 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Success banners from other flows redirecting here
   const justReset = location.state?.passwordReset;
+  const justVerified = location.state?.emailVerified;
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -37,14 +40,22 @@ export default function Login() {
       <div className="w-full max-w-sm bg-white rounded-[2rem] shadow-[0_16px_50px_rgba(20,184,166,0.15)] p-8">
         <Link to="/" className="flex items-center gap-2 font-display font-bold text-ink-900 mb-8">
           <Logo size={32} />
-          ShortenLink
+          URLify
         </Link>
         <h1 className="font-display font-bold text-2xl mb-1">Welcome back</h1>
         <p className="text-sm text-ink-500 mb-6">Log in to manage your links.</p>
 
+        {/* Email verified banner — shown after registration OTP flow */}
+        {justVerified && (
+          <p className="text-sm text-mint-600 bg-mint-50 rounded-lg px-3 py-2 mb-4">
+            ✓ Email verified! You can now log in.
+          </p>
+        )}
+
+        {/* Password reset banner — shown after reset flow */}
         {justReset && (
           <p className="text-sm text-mint-600 bg-mint-50 rounded-lg px-3 py-2 mb-4">
-            Your password has been updated. Please log in.
+            ✓ Your password has been updated. Please log in.
           </p>
         )}
 

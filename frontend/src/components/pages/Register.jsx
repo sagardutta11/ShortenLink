@@ -18,7 +18,13 @@ export default function Register() {
     const errs = {};
     if (!form.name.trim()) errs.name = 'Enter your name';
     if (!/^\S+@\S+\.\S+$/.test(form.email)) errs.email = 'Enter a valid email';
-    if (form.password.length < 8) errs.password = 'Use at least 8 characters';
+    if (
+      form.password.length < 8 ||
+      !/[A-Z]/.test(form.password) ||
+      !/[0-9]/.test(form.password)
+    ) {
+      errs.password = 'At least 8 characters, one uppercase letter, and one number';
+    }
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -81,7 +87,7 @@ export default function Register() {
             value={form.password}
             onChange={handleChange}
             error={fieldErrors.password}
-            placeholder="At least 8 characters"
+            placeholder="Min 8 chars, one uppercase, one number"
           />
 
           {error && (

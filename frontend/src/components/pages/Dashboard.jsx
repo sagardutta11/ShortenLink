@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import Logo from '../ui/Logo';
-import { getMyUrls, shortenUrl, getLinkAnalytics } from '../../lib/api';
+import { getMyUrls, shortenUrl, getLinkAnalytics, getMyPlaylists, addLinkToPlaylist } from '../../lib/api';
 import { useAuth } from '../../lib/AuthContext';
 import Button from '../ui/Button';
 
@@ -19,6 +19,11 @@ export default function Dashboard() {
   const [expandedId, setExpandedId] = useState(null);
   const [analytics, setAnalytics] = useState({}); // { [linkId]: data }
   const [analyticsLoading, setAnalyticsLoading] = useState(null); // linkId currently loading
+
+  const [playlistPickerFor, setPlaylistPickerFor] = useState(null); // linkId currently picking a playlist for
+  const [myPlaylists, setMyPlaylists] = useState([]);
+  const [addingToPlaylist, setAddingToPlaylist] = useState(false);
+  const [addedToPlaylistMsg, setAddedToPlaylistMsg] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -79,6 +84,28 @@ export default function Dashboard() {
     }
   };
 
+  const openPlaylistPicker = async (linkId) => {
+    setPlaylistPickerFor(linkId);
+    setAddedToPlaylistMsg('');
+    if (myPlaylists.length === 0) {
+      const lists = await getMyPlaylists();
+      setMyPlaylists(lists);
+    }
+  };
+
+  const handleAddToPlaylist = async (playlistId, linkId) => {
+    setAddingToPlaylist(true);
+    try {
+      await addLinkToPlaylist(playlistId, linkId);
+      setAddedToPlaylistMsg('Added!');
+      setTimeout(() => setPlaylistPickerFor(null), 900);
+    } catch (err) {
+      setAddedToPlaylistMsg(err.message || 'Could not add to playlist.');
+    } finally {
+      setAddingToPlaylist(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-cream px-6 py-10">
       <div className="max-w-3xl mx-auto">
@@ -88,6 +115,9 @@ export default function Dashboard() {
             ShortenLink
           </Link>
           <div className="flex items-center gap-4">
+            <Link to="/playlists" className="text-sm text-ink-500 hover:text-ink-900 transition-colors">
+              Playlists
+            </Link>
             <span className="text-sm text-ink-500">{user?.name}</span>
             <Button variant="outline" onClick={logout} className="px-4 py-2">
               Log out
@@ -160,7 +190,15 @@ export default function Dashboard() {
                     className="p-5 flex items-center justify-between gap-4 cursor-pointer select-none"
                   >
                     <div className="min-w-0">
-                      <p className="font-mono text-sm font-semibold text-mint-600">{link.shortUrl}</p>
+                      <a
+                        href={`http://${link.shortUrl}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-mono text-sm font-semibold text-mint-600 hover:underline block"
+                      >
+                        {link.shortUrl}
+                      </a>
                       <p className="text-xs text-ink-500 truncate mt-0.5">{link.longUrl}</p>
                       {link.expiresAt && (
                         <p className="text-[11px] text-amber-600 mt-0.5">
@@ -172,6 +210,24 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
                       <span className="text-xs text-ink-500">{link.clicks} clicks</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (playlistPickerFor === link.id) {
+                            setPlaylistPickerFor(null);
+                          } else {
+                            openPlaylistPicker(link.id);
+                          }
+                        }}
+                        className={`text-xs rounded-full px-3 py-1.5 transition-colors ${
+                          playlistPickerFor === link.id
+                            ? 'bg-mint-500 text-white'
+                            : 'bg-ink-50 text-ink-600 hover:bg-ink-100'
+                        }`}
+                      >
+                        {playlistPickerFor === link.id ? '× Playlist' : '+ Playlist'}
+                      </button>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -192,6 +248,36 @@ export default function Dashboard() {
                     </div>
                   </div>
 
+                  {playlistPickerFor === link.id && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="px-5 pb-4 pt-1 border-t border-mint-50"
+                    >
+                      <p className="text-xs text-ink-500 mb-2 mt-3">Add to playlist:</p>
+                      {myPlaylists.length === 0 ? (
+                        <p className="text-xs text-ink-400">
+                          No playlists yet — create one from the Playlists page first.
+                        </p>
+                      ) : (
+                        <ul className="flex flex-wrap gap-2">
+                          {myPlaylists.map((p) => (
+                            <li key={p.id}>
+                              <button
+                                disabled={addingToPlaylist}
+                                onClick={() => handleAddToPlaylist(p.id, link.id)}
+                                className="text-xs rounded-full bg-mint-50 text-mint-600 px-3 py-1.5 hover:bg-mint-100 disabled:opacity-50"
+                              >
+                                {p.name}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {addedToPlaylistMsg && (
+                        <p className="text-xs text-mint-600 mt-2">{addedToPlaylistMsg}</p>
+                      )}
+                    </div>
+                  )}
                   {isExpanded && (
                     <div className="px-5 pb-5 pt-1 border-t border-mint-50">
                       {isLoadingAnalytics ? (

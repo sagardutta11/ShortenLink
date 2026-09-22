@@ -1,14 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { verifyRegistrationOtp, resendRegistrationOtp, getPendingRegistrationEmail } from '../../lib/api';
-import { useAuth } from '../../lib/AuthContext';
 import Logo from '../ui/Logo';
 import Button from '../ui/Button';
 import OtpInput from '../ui/OtpInput';
 
 export default function VerifyRegisterOtp() {
   const navigate = useNavigate();
-  const { refresh } = useAuth();
   const [email] = useState(() => getPendingRegistrationEmail());
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
@@ -16,11 +14,6 @@ export default function VerifyRegisterOtp() {
   const [resending, setResending] = useState(false);
   const [notice, setNotice] = useState('');
 
-  useEffect(() => {
-    setNotice('');
-  }, [otp]);
-
-  // No pending signup in this session (e.g. direct URL visit) — send back to register
   if (!email) return <Navigate to="/register" replace />;
 
   const handleSubmit = async (e) => {
@@ -33,12 +26,10 @@ export default function VerifyRegisterOtp() {
     setLoading(true);
     try {
       await verifyRegistrationOtp({ email, otp });
-      refresh();
-      navigate('/dashboard');
-      // Deliberately not resetting loading here: this component is about to
-      // unmount as the route changes. Re-rendering first (with the pending
-      // signup already cleared) would trip the `!email` guard above and
-      // redirect back to /register before the navigate takes effect.
+      // Backend marks user verified but does NOT issue a JWT token here.
+      // Don't call refresh() — LS_USER was never written, user would be null.
+      // Go to /login so the user can get a real token by logging in.
+      navigate('/login', { state: { emailVerified: true } });
     } catch (err) {
       setError(err.message || 'Could not verify that code. Please try again.');
       setLoading(false);
@@ -47,6 +38,7 @@ export default function VerifyRegisterOtp() {
 
   const handleResend = async () => {
     setError('');
+    setNotice('');
     setResending(true);
     try {
       await resendRegistrationOtp();
@@ -66,9 +58,7 @@ export default function VerifyRegisterOtp() {
           ShortenLink
         </Link>
         <h1 className="font-display font-bold text-2xl mb-1">Check your email</h1>
-        <p className="text-sm text-ink-500 mb-1">
-          We sent a 5-digit code to
-        </p>
+        <p className="text-sm text-ink-500 mb-1">We sent a 5-digit code to</p>
         <p className="text-sm font-medium text-ink-900 mb-6">{email}</p>
 
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>

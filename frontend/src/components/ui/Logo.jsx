@@ -1,5 +1,5 @@
 /**
- * URLify brand mark: two linked loops that resolve into a single straight
+ * brand mark: two linked loops that resolve into a single straight
  * line — visualizing "tangled long URL becomes one clean link."
  * `size` controls the square bounding box in px.
  */

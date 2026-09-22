@@ -20,7 +20,13 @@ export default function ResetPassword() {
 
   const validate = () => {
     const errs = {};
-    if (form.password.length < 8) errs.password = 'Use at least 8 characters';
+    if (
+      form.password.length < 8 ||
+      !/[A-Z]/.test(form.password) ||
+      !/[0-9]/.test(form.password)
+    ) {
+      errs.password = 'At least 8 characters, one uppercase letter, and one number';
+    }
     if (form.confirm !== form.password) errs.confirm = 'Passwords do not match';
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
@@ -61,7 +67,7 @@ export default function ResetPassword() {
             value={form.password}
             onChange={handleChange}
             error={fieldErrors.password}
-            placeholder="At least 8 characters"
+            placeholder="Min 8 chars, one uppercase, one number"
           />
           <FormField
             id="confirm"

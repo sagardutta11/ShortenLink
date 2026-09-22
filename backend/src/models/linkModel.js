@@ -12,7 +12,23 @@ export const createLink = async ({ userId, originalUrl, shortCode, isCustomAlias
 };
 
 // Find a link by its short code (used for redirect + alias uniqueness check)
+// Also checks is_active and expiry in the DB query — previously a deactivated
+// or expired link would still be returned and the caller had to check manually,
+// risking a missed check path in the controller.
 export const findLinkByShortCode = async (shortCode) => {
+  const result = await query(
+    `SELECT * FROM links
+     WHERE short_code = $1
+       AND is_active = TRUE
+       AND (expires_at IS NULL OR expires_at > NOW())`,
+    [shortCode]
+  );
+  return result.rows[0] || null;
+};
+
+// Separate lookup without active/expiry filter — for the owner's dashboard,
+// they should still see their expired/deactivated links.
+export const findLinkByShortCodeRaw = async (shortCode) => {
   const result = await query(
     `SELECT * FROM links WHERE short_code = $1`,
     [shortCode]
@@ -44,7 +60,8 @@ export const countLinksByGuestIdentifier = async (guestIdentifier) => {
   return parseInt(result.rows[0].count, 10);
 };
 
-// Delete a link (only if it belongs to the requesting user)
+// deleteLink always requires both id AND userId — prevents IDOR.
+// An attacker with a valid JWT cannot delete another user's link by guessing the link id.
 export const deleteLink = async (id, userId) => {
   const result = await query(
     `DELETE FROM links WHERE id = $1 AND user_id = $2 RETURNING id`,
@@ -54,6 +71,11 @@ export const deleteLink = async (id, userId) => {
 };
 
 // Deactivate a link (soft alternative to delete, or auto-expire)
-export const deactivateLink = async (id) => {
-  await query(`UPDATE links SET is_active = FALSE WHERE id = $1`, [id]);
+// Added userId scoping — same IDOR protection as deleteLink
+export const deactivateLink = async (id, userId) => {
+  const result = await query(
+    `UPDATE links SET is_active = FALSE WHERE id = $1 AND user_id = $2 RETURNING id`,
+    [id, userId]
+  );
+  return result.rows[0] || null;
 };

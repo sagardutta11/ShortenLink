@@ -1,22 +1,19 @@
-// Centralized API client. Right now this runs against an in-memory mock so
-// the frontend is fully usable before the backend exists. Once the backend
-// is live, replace the internals of each function with real `fetch` calls to
-// BASE_URL — the function signatures/return shapes are designed to stay the
-// same so components don't need to change.
+// Centralized API client — all functions make real fetch calls to the backend.
 
-// Centralized API client — wired to the real backend.
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const BACKEND_ORIGIN = BASE_URL.replace(/\/api\/?$/, '');
+export const BACKEND_HOST = BACKEND_ORIGIN.replace(/^https?:\/\//, '');
 
-const BASE_URL = import.meta.env.VITE_API_URL;
-const BACKEND_ORIGIN = BASE_URL.replace(/\/api\/?$/, ''); // strip trailing /api to get just the host
-const BACKEND_HOST = BACKEND_ORIGIN.replace(/^https?:\/\//, ''); // strip protocol — UI adds its own
-const USE_MOCK = false;
+// ── localStorage keys ─────────────────────────────────────────────────────────
+const LS_TOKEN          = 'sl_token';
+const LS_USER           = 'sl_user';
+const LS_GUEST_COUNT    = 'sl_guest_count';
+const LS_PENDING_SIGNUP = 'sl_pending_signup';
+const LS_PENDING_RESET  = 'sl_pending_reset';
 
-const LS_LINKS = 'urlify_mock_links';
-const LS_USER = 'urlify_mock_user';
-const LS_GUEST_COUNT = 'urlify_mock_guest_count';
-const LS_TOKEN = 'urlify_token';
 const GUEST_LIMIT = 5; // must match backend's GUEST_LINK_LIMIT in linkController.js
 
+// ── localStorage helpers ──────────────────────────────────────────────────────
 function readLS(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -25,24 +22,20 @@ function readLS(key, fallback) {
     return fallback;
   }
 }
+
 function writeLS(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-function randomCode(len = 6) {
-  return Math.random().toString(36).slice(2, 2 + len);
-}
-
-async function fakeDelay(ms = 500) {
-  return new Promise((res) => setTimeout(res, ms));
-}
-
+// ── Token helpers ─────────────────────────────────────────────────────────────
 function getToken() {
   return localStorage.getItem(LS_TOKEN);
 }
+
 function setToken(token) {
   localStorage.setItem(LS_TOKEN, token);
 }
+
 function clearToken() {
   localStorage.removeItem(LS_TOKEN);
 }
@@ -52,46 +45,23 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-// ---------- URLs ----------
+// ── Error helper ──────────────────────────────────────────────────────────────
+async function toApiError(res) {
+  let message = 'Something went wrong. Please try again.';
+  try {
+    const data = await res.json();
+    message = data.message || message;
+  } catch {
+    // ignore parse errors
+  }
+  const err = new Error(message);
+  err.status = res.status;
+  return err;
+}
+
+// ── URLs ──────────────────────────────────────────────────────────────────────
 
 export async function shortenUrl({ longUrl, alias, expiresInDays }) {
-  if (USE_MOCK) {
-    await fakeDelay(400);
-    const user = readLS(LS_USER, null);
-    if (!user) {
-      const count = readLS(LS_GUEST_COUNT, 0);
-      if (count >= GUEST_LIMIT) {
-        const err = new Error('GUEST_LIMIT_REACHED');
-        err.code = 'GUEST_LIMIT_REACHED';
-        throw err;
-      }
-      writeLS(LS_GUEST_COUNT, count + 1);
-    }
-    if (alias && !user) {
-      const err = new Error('Custom aliases require an account');
-      err.code = 'ALIAS_REQUIRES_ACCOUNT';
-      throw err;
-    }
-    const code = alias || randomCode();
-    const links = readLS(LS_LINKS, []);
-    if (links.some((l) => l.code === code)) {
-      const err = new Error('That alias is already taken');
-      err.code = 'ALIAS_TAKEN';
-      throw err;
-    }
-    const link = {
-      id: crypto.randomUUID(),
-      longUrl,
-      code,
-      shortUrl: `urlify.dev/${code}`,
-      clicks: 0,
-      createdAt: new Date().toISOString(),
-    };
-    links.unshift(link);
-    writeLS(LS_LINKS, links);
-    return link;
-  }
-
   const res = await fetch(`${BASE_URL}/links`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -107,14 +77,13 @@ export async function shortenUrl({ longUrl, alias, expiresInDays }) {
   const data = await res.json();
   const link = data.link;
 
-  // Track guest link count locally too, so the UI can show "remaining" count.
-  // Backend is the source of truth for enforcement; this is just for display.
+  // Track guest link count locally for UI display ("X links remaining").
+  // Backend is the source of truth for enforcement — this is display-only.
   if (!getCurrentUser()) {
     const count = readLS(LS_GUEST_COUNT, 0);
     writeLS(LS_GUEST_COUNT, count + 1);
   }
 
-  // Normalize backend shape to what components expect
   return {
     id: link.id,
     longUrl: link.original_url,
@@ -127,10 +96,6 @@ export async function shortenUrl({ longUrl, alias, expiresInDays }) {
 }
 
 export async function getMyUrls() {
-  if (USE_MOCK) {
-    await fakeDelay(300);
-    return readLS(LS_LINKS, []);
-  }
   const res = await fetch(`${BASE_URL}/links`, {
     headers: { ...authHeaders() },
   });
@@ -156,21 +121,14 @@ export async function getLinkAnalytics(linkId) {
 }
 
 export function getGuestLinksRemaining() {
-  const user = readLS(LS_USER, null);
-  if (user) return null; // unlimited (or plan-based) once logged in
+  if (getCurrentUser()) return null; // logged-in users have no guest limit
   const count = readLS(LS_GUEST_COUNT, 0);
   return Math.max(0, GUEST_LIMIT - count);
 }
 
-// ---------- Auth ----------
+// ── Auth ──────────────────────────────────────────────────────────────────────
 
 export async function register({ name, email, password }) {
-  if (USE_MOCK) {
-    await fakeDelay(500);
-    const user = { id: crypto.randomUUID(), name, email };
-    writeLS(LS_USER, user);
-    return user;
-  }
   const res = await fetch(`${BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -181,16 +139,6 @@ export async function register({ name, email, password }) {
 }
 
 export async function login({ email, password }) {
-  if (USE_MOCK) {
-    await fakeDelay(500);
-    if (!email || !password) {
-      const err = new Error('Email and password are required');
-      throw err;
-    }
-    const user = { id: crypto.randomUUID(), name: email.split('@')[0], email };
-    writeLS(LS_USER, user);
-    return user;
-  }
   const res = await fetch(`${BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -212,88 +160,36 @@ export function getCurrentUser() {
   return readLS(LS_USER, null);
 }
 
-// ---------- OTP: email verification (registration) ----------
-// Flow: requestRegistrationOtp -> backend creates unverified user + sends OTP
-//       verifyRegistrationOtp  -> backend verifies OTP, marks user verified
-
-const LS_PENDING_SIGNUP = 'urlify_mock_pending_signup';
-const LS_PENDING_RESET = 'urlify_mock_pending_reset';
-const LS_USERS_BY_EMAIL = 'urlify_mock_users_by_email';
-
-function generateOtp() {
-  return String(Math.floor(10000 + Math.random() * 90000));
-}
+// ── OTP: registration ─────────────────────────────────────────────────────────
+// Flow: requestRegistrationOtp → backend creates unverified user + sends OTP
+//       verifyRegistrationOtp  → backend verifies OTP, marks user verified
 
 export async function requestRegistrationOtp({ name, email, password }) {
-  if (USE_MOCK) {
-    await fakeDelay(500);
-    const otp = generateOtp();
-    writeLS(LS_PENDING_SIGNUP, { name, email, password, otp, expiresAt: Date.now() + 10 * 60 * 1000 });
-    console.info(`[URLify mock] OTP for ${email}: ${otp}`);
-    return { email, devOtp: otp };
-  }
-  // our backend's /auth/register both creates the user AND sends the OTP
   const res = await fetch(`${BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password }),
   });
   if (!res.ok) throw await toApiError(res);
-  writeLS(LS_PENDING_SIGNUP, { name, email }); // remember for resend/getPendingRegistrationEmail
+  writeLS(LS_PENDING_SIGNUP, { name, email });
   return res.json();
 }
 
 export async function verifyRegistrationOtp({ email, otp }) {
-  if (USE_MOCK) {
-    await fakeDelay(500);
-    const pending = readLS(LS_PENDING_SIGNUP, null);
-    if (!pending || pending.email !== email) {
-      throw new Error('No pending registration found for this email.');
-    }
-    if (Date.now() > pending.expiresAt) {
-      const err = new Error('This code has expired. Please request a new one.');
-      err.code = 'OTP_EXPIRED';
-      throw err;
-    }
-    if (String(otp) !== pending.otp) {
-      const err = new Error('Incorrect code. Please check and try again.');
-      err.code = 'OTP_INVALID';
-      throw err;
-    }
-    const usersByEmail = readLS(LS_USERS_BY_EMAIL, {});
-    usersByEmail[pending.email] = { name: pending.name, email: pending.email, password: pending.password };
-    writeLS(LS_USERS_BY_EMAIL, usersByEmail);
-    localStorage.removeItem(LS_PENDING_SIGNUP);
-    const user = { id: crypto.randomUUID(), name: pending.name, email: pending.email };
-    writeLS(LS_USER, user);
-    return user;
-  }
   const res = await fetch(`${BASE_URL}/otp/verify-register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, otp }),
   });
   if (!res.ok) throw await toApiError(res);
-  const data = await res.json();
   localStorage.removeItem(LS_PENDING_SIGNUP);
-  // Backend doesn't auto-login after verify — user still needs to log in.
-  // We just clear pending state here; App should redirect to /login.
-  return data.user;
+  return res.json();
 }
 
 export async function resendRegistrationOtp() {
-  if (USE_MOCK) {
-    await fakeDelay(400);
-    const pending = readLS(LS_PENDING_SIGNUP, null);
-    if (!pending) throw new Error('No pending registration to resend a code for.');
-    const otp = generateOtp();
-    writeLS(LS_PENDING_SIGNUP, { ...pending, otp, expiresAt: Date.now() + 10 * 60 * 1000 });
-    console.info(`[URLify mock] Resent OTP for ${pending.email}: ${otp}`);
-    return { email: pending.email, devOtp: otp };
-  }
   const pending = readLS(LS_PENDING_SIGNUP, null);
   if (!pending) throw new Error('No pending registration to resend a code for.');
-  // our backend has no separate resend route — re-hitting /register invalidates + resends OTP
+  // Re-hitting /register invalidates previous OTP and sends a new one
   const res = await fetch(`${BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -304,20 +200,12 @@ export async function resendRegistrationOtp() {
 }
 
 export function getPendingRegistrationEmail() {
-  const pending = readLS(LS_PENDING_SIGNUP, null);
-  return pending?.email || null;
+  return readLS(LS_PENDING_SIGNUP, null)?.email || null;
 }
 
-// ---------- OTP: forgot password ----------
+// ── OTP: password reset ───────────────────────────────────────────────────────
 
 export async function requestPasswordReset({ email }) {
-  if (USE_MOCK) {
-    await fakeDelay(500);
-    const otp = generateOtp();
-    writeLS(LS_PENDING_RESET, { email, otp, verified: false, expiresAt: Date.now() + 10 * 60 * 1000 });
-    console.info(`[URLify mock] Password reset OTP for ${email}: ${otp}`);
-    return { email, devOtp: otp };
-  }
   const res = await fetch(`${BASE_URL}/auth/forgot-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -329,46 +217,18 @@ export async function requestPasswordReset({ email }) {
 }
 
 export async function verifyPasswordResetOtp({ email, otp }) {
-  if (USE_MOCK) {
-    await fakeDelay(500);
-    const pending = readLS(LS_PENDING_RESET, null);
-    if (!pending || pending.email !== email) {
-      throw new Error('No password reset in progress for this email.');
-    }
-    if (Date.now() > pending.expiresAt) {
-      const err = new Error('This code has expired. Please request a new one.');
-      err.code = 'OTP_EXPIRED';
-      throw err;
-    }
-    if (String(otp) !== pending.otp) {
-      const err = new Error('Incorrect code. Please check and try again.');
-      err.code = 'OTP_INVALID';
-      throw err;
-    }
-    writeLS(LS_PENDING_RESET, { ...pending, verified: true });
-    return { email };
-  }
   const res = await fetch(`${BASE_URL}/otp/verify-reset`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, otp }),
   });
   if (!res.ok) throw await toApiError(res);
-  // remember the verified otp locally so resetPassword can resend it (backend re-checks it anyway)
+  // Store verified otp locally — resetPassword resends it to the backend for final check
   writeLS(LS_PENDING_RESET, { email, otp, verified: true });
   return { email };
 }
 
 export async function resendPasswordResetOtp() {
-  if (USE_MOCK) {
-    await fakeDelay(400);
-    const pending = readLS(LS_PENDING_RESET, null);
-    if (!pending) throw new Error('No password reset in progress to resend a code for.');
-    const otp = generateOtp();
-    writeLS(LS_PENDING_RESET, { ...pending, otp, verified: false, expiresAt: Date.now() + 10 * 60 * 1000 });
-    console.info(`[URLify mock] Resent password reset OTP for ${pending.email}: ${otp}`);
-    return { email: pending.email, devOtp: otp };
-  }
   const pending = readLS(LS_PENDING_RESET, null);
   if (!pending) throw new Error('No password reset in progress to resend a code for.');
   const res = await fetch(`${BASE_URL}/auth/forgot-password`, {
@@ -381,25 +241,10 @@ export async function resendPasswordResetOtp() {
 }
 
 export async function resetPassword({ email, newPassword }) {
-  if (USE_MOCK) {
-    await fakeDelay(500);
-    const pending = readLS(LS_PENDING_RESET, null);
-    if (!pending || pending.email !== email || !pending.verified) {
-      throw new Error('Please verify the code before setting a new password.');
-    }
-    const usersByEmail = readLS(LS_USERS_BY_EMAIL, {});
-    if (usersByEmail[email]) {
-      usersByEmail[email].password = newPassword;
-      writeLS(LS_USERS_BY_EMAIL, usersByEmail);
-    }
-    localStorage.removeItem(LS_PENDING_RESET);
-    return { success: true };
-  }
   const pending = readLS(LS_PENDING_RESET, null);
   if (!pending || pending.email !== email || !pending.verified) {
     throw new Error('Please verify the code before setting a new password.');
   }
-  // our backend's reset-password route re-validates the OTP itself, so we resend it here
   const res = await fetch(`${BASE_URL}/auth/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -411,19 +256,93 @@ export async function resetPassword({ email, newPassword }) {
 }
 
 export function getPendingResetEmail() {
-  const pending = readLS(LS_PENDING_RESET, null);
-  return pending?.email || null;
+  return readLS(LS_PENDING_RESET, null)?.email || null;
 }
 
-async function toApiError(res) {
-  let message = 'Something went wrong. Please try again.';
-  try {
-    const data = await res.json();
-    message = data.message || message;
-  } catch {
-    // ignore parse errors
-  }
-  const err = new Error(message);
-  err.status = res.status;
-  return err;
+// ── Playlists ─────────────────────────────────────────────────────────────────
+
+export async function createPlaylist({ name, description, visibility }) {
+  const res = await fetch(`${BASE_URL}/playlists`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ name, description, visibility }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()).playlist;
+}
+
+export async function getMyPlaylists() {
+  const res = await fetch(`${BASE_URL}/playlists`, {
+    headers: { ...authHeaders() },
+  });
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()).playlists;
+}
+
+export async function getPlaylistDetail(playlistId) {
+  const res = await fetch(`${BASE_URL}/playlists/${playlistId}`, {
+    headers: { ...authHeaders() },
+  });
+  if (!res.ok) throw await toApiError(res);
+  return res.json(); // { playlist, links }
+}
+
+export async function updatePlaylistDetails(playlistId, { name, description, visibility }) {
+  const res = await fetch(`${BASE_URL}/playlists/${playlistId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ name, description, visibility }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()).playlist;
+}
+
+export async function deletePlaylist(playlistId) {
+  const res = await fetch(`${BASE_URL}/playlists/${playlistId}`, {
+    method: 'DELETE',
+    headers: { ...authHeaders() },
+  });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export async function addLinkToPlaylist(playlistId, linkId) {
+  const res = await fetch(`${BASE_URL}/playlists/${playlistId}/links`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ linkId }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export async function removeLinkFromPlaylist(playlistId, linkId) {
+  const res = await fetch(`${BASE_URL}/playlists/${playlistId}/links/${linkId}`, {
+    method: 'DELETE',
+    headers: { ...authHeaders() },
+  });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export async function reorderPlaylistLinks(playlistId, orderedLinkIds) {
+  const res = await fetch(`${BASE_URL}/playlists/${playlistId}/reorder`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ order: orderedLinkIds }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()).links;
+}
+
+export async function searchPublicPlaylists(q) {
+  const res = await fetch(`${BASE_URL}/playlists/search?q=${encodeURIComponent(q)}`);
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()).results;
+}
+
+export async function getPublicPlaylist(shareCode) {
+  const res = await fetch(`${BACKEND_ORIGIN}/p/${shareCode}`);
+  if (!res.ok) throw await toApiError(res);
+  return res.json(); // { playlist, links }
 }

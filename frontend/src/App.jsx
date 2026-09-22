@@ -10,6 +10,9 @@ import ForgotPassword from './components/pages/ForgotPassword';
 import VerifyResetOtp from './components/pages/VerifyResetOtp';
 import ResetPassword from './components/pages/ResetPassword';
 import Dashboard from './components/pages/Dashboard';
+import Playlists from './components/pages/Playlists';
+import PlaylistDetail from './components/pages/PlaylistDetail';
+import PublicPlaylist from './components/pages/PublicPlaylist';
 
 function App() {
   return (
@@ -34,6 +37,9 @@ function App() {
             <Route path="/forgot-password/verify" element={<VerifyResetOtp />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/playlists" element={<Playlists />} />
+            <Route path="/playlists/:id" element={<PlaylistDetail />} />
+            <Route path="/p/:shareCode" element={<PublicPlaylist />} />
           </Routes>
         </div>
       </BrowserRouter>
