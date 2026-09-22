@@ -1,17 +1,7 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { env } from '../config/env.js';
 
-// ✅ FIXED: Use explicit host/port instead of service:'gmail'
-// Render free tier blocks port 465 (SSL) but allows port 587 (TLS)
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // TLS — upgrades after connection
-  auth: {
-    user: env.EMAIL_USER,
-    pass: env.EMAIL_APP_PASSWORD,
-  },
-});
+const resend = new Resend(env.RESEND_API_KEY);
 
 const VALID_EMAIL_RE = /^[^\s@\r\n]+@[^\s@\r\n]+\.[^\s@\r\n]+$/;
 
@@ -40,14 +30,14 @@ export const sendOtpEmail = async ({ to, otp, purpose }) => {
     : `Your password reset OTP is ${otp}. It expires in 10 minutes. Do not share this code with anyone.`;
 
   try {
-    await transporter.sendMail({
-      from: `"ShortenLink" <${env.EMAIL_USER}>`,
+    await resend.emails.send({
+      from: 'ShortenLink <onboarding@resend.dev>',
       to,
       subject,
       text,
     });
   } catch (err) {
-    console.error('[sendEmail] SMTP error:', err.message);
+    console.error('[sendEmail] Resend error:', err.message);
     throw new Error('Failed to send email. Please try again.');
   }
 };

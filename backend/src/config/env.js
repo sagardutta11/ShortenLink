@@ -33,4 +33,5 @@ export const env = {
   EMAIL_USER: process.env.EMAIL_USER,
   EMAIL_APP_PASSWORD: process.env.EMAIL_APP_PASSWORD,
   CORS_ORIGIN: process.env.CORS_ORIGIN,
+  RESEND_API_KEY: process.env.RESEND_API_KEY,
 };
