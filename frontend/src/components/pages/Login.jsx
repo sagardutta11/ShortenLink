@@ -40,7 +40,7 @@ export default function Login() {
       <div className="w-full max-w-sm bg-white rounded-[2rem] shadow-[0_16px_50px_rgba(20,184,166,0.15)] p-8">
         <Link to="/" className="flex items-center gap-2 font-display font-bold text-ink-900 mb-8">
           <Logo size={32} />
-          URLify
+          ShortenLink
         </Link>
         <h1 className="font-display font-bold text-2xl mb-1">Welcome back</h1>
         <p className="text-sm text-ink-500 mb-6">Log in to manage your links.</p>
