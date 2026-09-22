@@ -7,9 +7,7 @@ const usingConnectionString = !!process.env.DATABASE_URL;
 
 const required = [
   'JWT_SECRET',
-  'EMAIL_USER',
-  'EMAIL_APP_PASSWORD',
-  // DB vars only required if not using DATABASE_URL
+  'RESEND_API_KEY',
   ...(!usingConnectionString ? ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'] : []),
 ];
 
@@ -30,8 +28,6 @@ export const env = {
   JWT_SECRET: process.env.JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   NODE_ENV: process.env.NODE_ENV || 'development',
-  EMAIL_USER: process.env.EMAIL_USER,
-  EMAIL_APP_PASSWORD: process.env.EMAIL_APP_PASSWORD,
   CORS_ORIGIN: process.env.CORS_ORIGIN,
   RESEND_API_KEY: process.env.RESEND_API_KEY,
 };
